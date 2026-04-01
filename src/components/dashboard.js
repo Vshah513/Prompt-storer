@@ -2,9 +2,9 @@
 
 import { getPrompts, getCategories } from '../store.js';
 
-export function renderDashboard(container, onNavigate, onAddClick) {
-  const prompts = getPrompts();
-  const categories = getCategories();
+export async function renderDashboard(container, onNavigate, onAddClick) {
+  const prompts = await getPrompts();
+  const categories = await getCategories();
 
   const countByCategory = {};
   categories.forEach(c => { countByCategory[c.id] = 0; });

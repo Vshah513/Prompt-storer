@@ -8,11 +8,11 @@ let isPanning = false, startPanX = 0, startPanY = 0;
 let dragCard = null, dragOffX = 0, dragOffY = 0;
 let surface = null;
 
-export function renderCanvas(container, prompts, onCardClick) {
+export async function renderCanvas(container, prompts, onCardClick) {
   container.style.padding = '0';
   container.style.overflow = 'hidden';
 
-  const positions = getCanvasPositions();
+  const positions = await getCanvasPositions();
 
   container.innerHTML = `
     <div class="canvas-container" id="canvas-container">
@@ -31,8 +31,9 @@ export function renderCanvas(container, prompts, onCardClick) {
   const canvasContainer = document.getElementById('canvas-container');
 
   // Create cards on canvas
-  prompts.forEach((prompt, i) => {
-    const cat = getCategoryById(prompt.category);
+  for (let i = 0; i < prompts.length; i++) {
+    const prompt = prompts[i];
+    const cat = await getCategoryById(prompt.category);
     const pos = positions[prompt.id] || { x: 100 + (i % 5) * 320, y: 100 + Math.floor(i / 5) * 250 };
 
     const card = document.createElement('div');
@@ -73,9 +74,9 @@ export function renderCanvas(container, prompts, onCardClick) {
 
     // Save initial position if not saved
     if (!positions[prompt.id]) {
-      saveCanvasPosition(prompt.id, pos.x, pos.y);
+      await saveCanvasPosition(prompt.id, pos.x, pos.y);
     }
-  });
+  }
 
   // Apply initial transform
   updateTransform();
@@ -105,7 +106,7 @@ export function renderCanvas(container, prompts, onCardClick) {
     }
   });
 
-  document.addEventListener('mouseup', () => {
+  document.addEventListener('mouseup', async () => {
     if (isPanning) {
       isPanning = false;
       canvasContainer.classList.remove('grabbing');
@@ -116,7 +117,7 @@ export function renderCanvas(container, prompts, onCardClick) {
       // Save position
       const x = parseInt(dragCard.style.left);
       const y = parseInt(dragCard.style.top);
-      saveCanvasPosition(dragCard.dataset.id, x, y);
+      await saveCanvasPosition(dragCard.dataset.id, x, y);
       dragCard = null;
     }
   });
@@ -141,7 +142,7 @@ export function renderCanvas(container, prompts, onCardClick) {
     updateTransform();
     document.getElementById('canvas-zoom-label').textContent = `${Math.round(zoom * 100)}%`;
   });
-  document.getElementById('canvas-fit')?.addEventListener('click', () => fitToView(prompts));
+  document.getElementById('canvas-fit')?.addEventListener('click', async () => await fitToView(prompts));
   document.getElementById('canvas-reset')?.addEventListener('click', () => {
     panX = 0; panY = 0; zoom = 1;
     updateTransform();
@@ -155,8 +156,8 @@ function updateTransform() {
   }
 }
 
-function fitToView(prompts) {
-  const positions = getCanvasPositions();
+async function fitToView(prompts) {
+  const positions = await getCanvasPositions();
   if (!prompts.length) return;
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

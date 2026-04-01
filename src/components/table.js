@@ -1,12 +1,12 @@
 // PromptVault — Table View (Notion-style)
 
-import { getCategoryById } from '../store.js';
+import { getCategories } from '../store.js';
 import { formatDate, showToast } from '../utils/helpers.js';
 
 let sortField = 'createdAt';
 let sortDir = 'desc';
 
-export function renderTable(container, prompts, onRowClick) {
+export async function renderTable(container, prompts, onRowClick) {
   if (!prompts.length) {
     container.innerHTML = `
       <div class="gallery-empty">
@@ -17,6 +17,8 @@ export function renderTable(container, prompts, onRowClick) {
     `;
     return;
   }
+
+  const categories = await getCategories();
 
   // Sort
   const sorted = [...prompts].sort((a, b) => {
@@ -42,7 +44,7 @@ export function renderTable(container, prompts, onRowClick) {
         </thead>
         <tbody>
           ${sorted.map(p => {
-            const cat = getCategoryById(p.category);
+            const cat = categories.find(c => c.id === p.category) || { id: p.category, name: p.category, icon: '📁', color: 'cat-default' };
             return `
               <tr data-id="${p.id}">
                 <td>
@@ -75,7 +77,7 @@ export function renderTable(container, prompts, onRowClick) {
 
   // Sort headers
   container.querySelectorAll('th[data-sort]').forEach(th => {
-    th.addEventListener('click', () => {
+    th.addEventListener('click', async () => {
       const field = th.dataset.sort;
       if (sortField === field) {
         sortDir = sortDir === 'asc' ? 'desc' : 'asc';
@@ -83,7 +85,7 @@ export function renderTable(container, prompts, onRowClick) {
         sortField = field;
         sortDir = field === 'createdAt' ? 'desc' : 'asc';
       }
-      renderTable(container, prompts, onRowClick);
+      await renderTable(container, prompts, onRowClick);
     });
   });
 

@@ -2,7 +2,7 @@
 
 import { createCard } from './card.js';
 
-export function renderGallery(container, prompts, onCardClick, onFavoriteToggle) {
+export async function renderGallery(container, prompts, onCardClick, onFavoriteToggle) {
   if (!prompts.length) {
     container.innerHTML = `
       <div class="gallery-empty">
@@ -17,11 +17,12 @@ export function renderGallery(container, prompts, onCardClick, onFavoriteToggle)
   const grid = document.createElement('div');
   grid.className = 'gallery-grid';
 
-  prompts.forEach((prompt, i) => {
-    const card = createCard(prompt, onCardClick, onFavoriteToggle);
+  for (let i = 0; i < prompts.length; i++) {
+    const prompt = prompts[i];
+    const card = await createCard(prompt, onCardClick, onFavoriteToggle);
     card.style.animationDelay = `${i * 50}ms`;
     grid.appendChild(card);
-  });
+  }
 
   container.innerHTML = '';
   container.appendChild(grid);

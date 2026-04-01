@@ -1,11 +1,10 @@
 // PromptVault — Prompt Card Component
 
-import { getCategoryById, toggleFavorite } from '../store.js';
+import { getCategoryById, toggleFavorite, getImage } from '../store.js';
 import { formatDate, truncate, showToast } from '../utils/helpers.js';
-import { getImage } from '../store.js';
 
-export function createCard(prompt, onClick, onFavoriteToggle) {
-  const cat = getCategoryById(prompt.category);
+export async function createCard(prompt, onClick, onFavoriteToggle) {
+  const cat = await getCategoryById(prompt.category);
   const card = document.createElement('div');
   card.className = 'prompt-card';
   card.dataset.id = prompt.id;
@@ -46,11 +45,11 @@ export function createCard(prompt, onClick, onFavoriteToggle) {
   }
 
   // Event delegation
-  card.addEventListener('click', (e) => {
+  card.addEventListener('click', async (e) => {
     const action = e.target.closest('[data-action]')?.dataset.action;
     if (action === 'favorite') {
       e.stopPropagation();
-      const isFav = toggleFavorite(prompt.id);
+      const isFav = await toggleFavorite(prompt.id);
       const btn = card.querySelector('.card-favorite');
       btn.textContent = isFav ? '★' : '☆';
       btn.classList.toggle('active', isFav);

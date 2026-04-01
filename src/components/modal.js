@@ -7,7 +7,7 @@ let currentImages = []; // { id, dataUrl }
 let mdFile = null;
 let editingPrompt = null;
 
-export function openModal(prompt = null, onSave) {
+export async function openModal(prompt = null, onSave) {
   editingPrompt = prompt;
   currentImages = [];
   mdFile = null;
@@ -15,7 +15,7 @@ export function openModal(prompt = null, onSave) {
   const overlay = document.getElementById('modal-overlay');
   overlay.classList.remove('hidden');
 
-  const categories = getCategories();
+  const categories = await getCategories();
 
   overlay.innerHTML = `
     <div class="modal">
@@ -278,7 +278,7 @@ async function savePromptFromModal(tags, onSave) {
     return;
   }
 
-  // Save images to IndexedDB
+  // Save images to Supabase
   const imageIds = [];
   for (const img of currentImages) {
     await saveImage(img.id, img.dataUrl);
@@ -288,7 +288,7 @@ async function savePromptFromModal(tags, onSave) {
   if (editingPrompt) {
     // Keep existing images that weren't removed
     const allImageIds = [...(editingPrompt.imageIds || []), ...imageIds];
-    const updated = updatePrompt(editingPrompt.id, {
+    const updated = await updatePrompt(editingPrompt.id, {
       title, category, description, tags, promptContent, outputText,
       imageIds: allImageIds,
       fileName: mdFile?.name || editingPrompt.fileName,
@@ -306,7 +306,7 @@ async function savePromptFromModal(tags, onSave) {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-    addPrompt(prompt);
+    await addPrompt(prompt);
     showToast('Prompt created!', 'success');
     closeModal();
     if (onSave) onSave(prompt);

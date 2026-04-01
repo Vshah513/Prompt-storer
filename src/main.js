@@ -15,13 +15,13 @@ import { openViewer } from './components/viewer.js';
 
 let currentQuery = '';
 
-function init() {
-  renderSidebar(handleCategoryChange, handleViewChange);
+async function init() {
+  await renderSidebar(handleCategoryChange, handleViewChange);
   renderHeader(handleSearch, handleViewModeChange, handleAddPrompt);
-  renderCurrentView();
+  await renderCurrentView();
 }
 
-function renderCurrentView() {
+async function renderCurrentView() {
   const container = document.getElementById('view-container');
   const view = getActiveView();
   const viewMode = getViewMode();
@@ -37,7 +37,7 @@ function renderCurrentView() {
   }
 
   // Get filtered prompts
-  let prompts = getPrompts();
+  let prompts = await getPrompts();
   const category = getActiveCategory();
   prompts = filterByCategory(prompts, category);
   if (currentQuery) {
@@ -61,41 +61,41 @@ function renderCurrentView() {
   }
 }
 
-function handleSearch(query) {
+async function handleSearch(query) {
   currentQuery = query;
   if (getActiveView() === 'dashboard' && query) {
     setActiveView('prompts');
     setViewMode('gallery');
   }
-  renderCurrentView();
+  await renderCurrentView();
 }
 
-function handleCategoryChange(category) {
+async function handleCategoryChange(category) {
   setActiveCategory(category);
   setActiveView('prompts');
-  renderCurrentView();
+  await renderCurrentView();
   renderHeader(handleSearch, handleViewModeChange, handleAddPrompt);
 }
 
-function handleViewChange(view) {
+async function handleViewChange(view) {
   setActiveView(view);
-  renderCurrentView();
+  await renderCurrentView();
   renderHeader(handleSearch, handleViewModeChange, handleAddPrompt);
 }
 
-function handleViewModeChange(mode) {
+async function handleViewModeChange(mode) {
   setViewMode(mode);
-  renderCurrentView();
+  await renderCurrentView();
 }
 
-function handleAddPrompt() {
-  openModal(null, () => {
-    renderCurrentView();
-    renderSidebar(handleCategoryChange, handleViewChange);
+async function handleAddPrompt() {
+  openModal(null, async () => {
+    await renderCurrentView();
+    await renderSidebar(handleCategoryChange, handleViewChange);
   });
 }
 
-function handleCardAction(prompt, action) {
+async function handleCardAction(prompt, action) {
   switch (action) {
     case 'view':
       openViewer(
@@ -113,10 +113,10 @@ function handleCardAction(prompt, action) {
   }
 }
 
-function handleEditPrompt(prompt) {
-  openModal(prompt, () => {
-    renderCurrentView();
-    renderSidebar(handleCategoryChange, handleViewChange);
+async function handleEditPrompt(prompt) {
+  openModal(prompt, async () => {
+    await renderCurrentView();
+    await renderSidebar(handleCategoryChange, handleViewChange);
   });
 }
 
@@ -124,15 +124,15 @@ async function handleDeletePrompt(prompt) {
   if (!confirm(`Delete "${prompt.title || 'Untitled'}"? This cannot be undone.`)) return;
   await storeDeletePrompt(prompt.id);
   showToast('Prompt deleted', 'info');
-  renderCurrentView();
-  renderSidebar(handleCategoryChange, handleViewChange);
+  await renderCurrentView();
+  await renderSidebar(handleCategoryChange, handleViewChange);
 }
 
-function handleFavoriteToggle() {
-  renderSidebar(handleCategoryChange, handleViewChange);
+async function handleFavoriteToggle() {
+  await renderSidebar(handleCategoryChange, handleViewChange);
 }
 
-function handleDashboardNav(target, prompt) {
+async function handleDashboardNav(target, prompt) {
   if (target === 'view' && prompt) {
     openViewer(
       prompt,
@@ -144,8 +144,8 @@ function handleDashboardNav(target, prompt) {
   setActiveCategory(target);
   setActiveView('prompts');
   setViewMode('gallery');
-  renderCurrentView();
-  renderSidebar(handleCategoryChange, handleViewChange);
+  await renderCurrentView();
+  await renderSidebar(handleCategoryChange, handleViewChange);
   renderHeader(handleSearch, handleViewModeChange, handleAddPrompt);
 }
 

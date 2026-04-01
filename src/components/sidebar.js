@@ -6,10 +6,10 @@ import { generateId, showToast } from '../utils/helpers.js';
 let activeCategory = 'all';
 let activeView = 'dashboard';
 
-export function renderSidebar(onCategoryChange, onViewChange) {
+export async function renderSidebar(onCategoryChange, onViewChange) {
   const sidebar = document.getElementById('sidebar');
-  const categories = getCategories();
-  const prompts = getPrompts();
+  const categories = await getCategories();
+  const prompts = await getPrompts();
 
   const countByCategory = {};
   prompts.forEach(p => {
@@ -74,28 +74,28 @@ export function renderSidebar(onCategoryChange, onViewChange) {
 
   // Event listeners
   sidebar.querySelectorAll('[data-view]').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', async () => {
       activeView = el.dataset.view;
       activeCategory = 'all';
-      onViewChange(activeView);
+      await onViewChange(activeView);
       renderSidebar(onCategoryChange, onViewChange);
     });
   });
 
   sidebar.querySelectorAll('[data-category]').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', async () => {
       activeCategory = el.dataset.category;
       activeView = 'prompts';
-      onCategoryChange(activeCategory);
+      await onCategoryChange(activeCategory);
       renderSidebar(onCategoryChange, onViewChange);
     });
   });
 
-  document.getElementById('add-category-btn')?.addEventListener('click', () => {
+  document.getElementById('add-category-btn')?.addEventListener('click', async () => {
     const name = prompt('Category name:');
     if (!name?.trim()) return;
     const icon = prompt('Emoji icon (e.g. 🔧):') || '📁';
-    addCategory({
+    await addCategory({
       id: generateId(),
       name: name.trim(),
       icon,
@@ -106,11 +106,11 @@ export function renderSidebar(onCategoryChange, onViewChange) {
   });
 
   document.getElementById('export-btn')?.addEventListener('click', () => {
-    exportData();
+    showToast('Export functionality is being updated for Supabase…', 'info');
   });
 
   document.getElementById('import-btn')?.addEventListener('click', () => {
-    importData();
+    showToast('Import functionality is being updated for Supabase…', 'info');
   });
 }
 
@@ -118,44 +118,3 @@ export function setActiveCategory(cat) { activeCategory = cat; }
 export function setActiveView(view) { activeView = view; }
 export function getActiveCategory() { return activeCategory; }
 export function getActiveView() { return activeView; }
-
-function exportData() {
-  const data = {
-    prompts: JSON.parse(localStorage.getItem('pv_prompts') || '[]'),
-    categories: JSON.parse(localStorage.getItem('pv_categories') || '[]'),
-    canvas: JSON.parse(localStorage.getItem('pv_canvas_positions') || '{}'),
-  };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `promptvault-export-${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('Data exported successfully', 'success');
-}
-
-function importData() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.json';
-  input.onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const data = JSON.parse(reader.result);
-        if (data.prompts) localStorage.setItem('pv_prompts', JSON.stringify(data.prompts));
-        if (data.categories) localStorage.setItem('pv_categories', JSON.stringify(data.categories));
-        if (data.canvas) localStorage.setItem('pv_canvas_positions', JSON.stringify(data.canvas));
-        showToast('Data imported! Refreshing…', 'success');
-        setTimeout(() => location.reload(), 1000);
-      } catch {
-        showToast('Invalid file format', 'error');
-      }
-    };
-    reader.readAsText(file);
-  };
-  input.click();
-}

@@ -9,10 +9,10 @@ export async function openViewer(prompt, onEdit, onDelete) {
   const overlay = document.getElementById('viewer-overlay');
   overlay.classList.remove('hidden');
 
-  const cat = getCategoryById(prompt.category);
+  const cat = await getCategoryById(prompt.category);
 
   overlay.innerHTML = `
-    <div class="viewer-backdrop"></div>
+    <ul class="viewer-backdrop"></ul>
     <div class="viewer-panel">
       <div class="viewer-header">
         <h2>${prompt.title || 'Untitled'}</h2>

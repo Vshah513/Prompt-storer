@@ -1,197 +1,301 @@
-// PromptVault — Data Store (IndexedDB + localStorage)
+// PromptVault — Data Store (Supabase Sync)
+import { supabase } from './utils/supabase.js';
 
-const DB_NAME = 'promptvault';
-const DB_VERSION = 1;
-const STORE_IMAGES = 'images';
-const LS_KEY_PROMPTS = 'pv_prompts';
-const LS_KEY_CATEGORIES = 'pv_categories';
-const LS_KEY_CANVAS = 'pv_canvas_positions';
-const LS_KEY_SETTINGS = 'pv_settings';
-
-const DEFAULT_CATEGORIES = [
-  { id: 'coding', name: 'Coding', icon: '💻', color: 'cat-coding' },
-  { id: '3d', name: '3D / Animations', icon: '🎨', color: 'cat-3d' },
-  { id: 'immersive', name: 'Immersive', icon: '🌐', color: 'cat-immersive' },
-  { id: 'api', name: 'API / Backend', icon: '⚡', color: 'cat-api' },
-  { id: 'claude', name: 'Claude / AI', icon: '🤖', color: 'cat-claude' },
-  { id: 'ui', name: 'UI / Design', icon: '🎯', color: 'cat-ui' },
-];
-
-let db = null;
-
-function openDB() {
-  return new Promise((resolve, reject) => {
-    if (db) return resolve(db);
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (e) => {
-      const d = e.target.result;
-      if (!d.objectStoreNames.contains(STORE_IMAGES)) {
-        d.createObjectStore(STORE_IMAGES, { keyPath: 'id' });
-      }
-    };
-    req.onsuccess = (e) => { db = e.target.result; resolve(db); };
-    req.onerror = (e) => reject(e.target.error);
-  });
-}
-
-// ---- Image storage (IndexedDB) ----
-
+// ---- Image storage (Supabase 'images' table) ----
 export async function saveImage(id, dataUrl) {
-  const d = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = d.transaction(STORE_IMAGES, 'readwrite');
-    tx.objectStore(STORE_IMAGES).put({ id, dataUrl, createdAt: Date.now() });
-    tx.oncomplete = () => resolve(id);
-    tx.onerror = (e) => reject(e.target.error);
-  });
+  const { data, error } = await supabase
+    .from('images')
+    .upsert({ id, data_url: dataUrl, created_at: Date.now() });
+  
+  if (error) {
+    console.error('Error saving image:', error);
+    throw error;
+  }
+  return id;
 }
 
 export async function getImage(id) {
-  const d = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = d.transaction(STORE_IMAGES, 'readonly');
-    const req = tx.objectStore(STORE_IMAGES).get(id);
-    req.onsuccess = () => resolve(req.result?.dataUrl || null);
-    req.onerror = (e) => reject(e.target.error);
-  });
+  const { data, error } = await supabase
+    .from('images')
+    .select('data_url')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    console.error('Error fetching image:', error);
+    return null;
+  }
+  return data?.data_url || null;
 }
 
 export async function deleteImage(id) {
-  const d = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = d.transaction(STORE_IMAGES, 'readwrite');
-    tx.objectStore(STORE_IMAGES).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = (e) => reject(e.target.error);
-  });
+  const { error } = await supabase
+    .from('images')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting image:', error);
+    throw error;
+  }
 }
 
 export async function getAllImages(ids) {
-  const d = await openDB();
-  return Promise.all(ids.map(id => new Promise((resolve, reject) => {
-    const tx = d.transaction(STORE_IMAGES, 'readonly');
-    const req = tx.objectStore(STORE_IMAGES).get(id);
-    req.onsuccess = () => resolve({ id, dataUrl: req.result?.dataUrl || null });
-    req.onerror = (e) => reject(e.target.error);
-  })));
-}
+  if (!ids?.length) return [];
+  const { data, error } = await supabase
+    .from('images')
+    .select('id, data_url')
+    .in('id', ids);
 
-// ---- Prompts (localStorage) ----
-
-export function getPrompts() {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEY_PROMPTS) || '[]');
-  } catch { return []; }
-}
-
-export function savePrompts(prompts) {
-  localStorage.setItem(LS_KEY_PROMPTS, JSON.stringify(prompts));
-}
-
-export function addPrompt(prompt) {
-  const prompts = getPrompts();
-  prompts.unshift(prompt);
-  savePrompts(prompts);
-  return prompt;
-}
-
-export function updatePrompt(id, updates) {
-  const prompts = getPrompts();
-  const idx = prompts.findIndex(p => p.id === id);
-  if (idx !== -1) {
-    prompts[idx] = { ...prompts[idx], ...updates, updatedAt: Date.now() };
-    savePrompts(prompts);
-    return prompts[idx];
+  if (error) {
+    console.error('Error fetching batch images:', error);
+    return [];
   }
-  return null;
+  return data || [];
+}
+
+// ---- Prompts (Supabase 'prompts' table) ----
+export async function getPrompts() {
+  const { data, error } = await supabase
+    .from('prompts')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching prompts:', error);
+    return [];
+  }
+
+  // Map database fields to application camelCase
+  return data.map(p => ({
+    id: p.id,
+    title: p.title,
+    description: p.description,
+    category: p.category_id,
+    tags: p.tags || [],
+    promptContent: p.prompt_content,
+    outputText: p.output_text,
+    imageIds: p.image_ids || [],
+    fileName: p.file_name,
+    favorite: p.favorite,
+    createdAt: p.created_at,
+    updatedAt: p.updated_at
+  }));
+}
+
+export async function addPrompt(prompt) {
+  const { data, error } = await supabase
+    .from('prompts')
+    .insert([{
+      id: prompt.id,
+      title: prompt.title,
+      description: prompt.description,
+      category_id: prompt.category,
+      tags: prompt.tags,
+      prompt_content: prompt.promptContent,
+      output_text: prompt.outputText,
+      image_ids: prompt.imageIds,
+      file_name: prompt.fileName,
+      favorite: prompt.favorite,
+      created_at: prompt.createdAt,
+      updated_at: prompt.updatedAt
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error adding prompt:', error);
+    throw error;
+  }
+  return data;
+}
+
+export async function updatePrompt(id, updates) {
+  const dbUpdates = {};
+  if (updates.title !== undefined) dbUpdates.title = updates.title;
+  if (updates.description !== undefined) dbUpdates.description = updates.description;
+  if (updates.category !== undefined) dbUpdates.category_id = updates.category;
+  if (updates.tags !== undefined) dbUpdates.tags = updates.tags;
+  if (updates.promptContent !== undefined) dbUpdates.prompt_content = updates.promptContent;
+  if (updates.outputText !== undefined) dbUpdates.output_text = updates.outputText;
+  if (updates.imageIds !== undefined) dbUpdates.image_ids = updates.imageIds;
+  if (updates.fileName !== undefined) dbUpdates.file_name = updates.fileName;
+  if (updates.favorite !== undefined) dbUpdates.favorite = updates.favorite;
+  
+  dbUpdates.updated_at = Date.now();
+
+  const { data, error } = await supabase
+    .from('prompts')
+    .update(dbUpdates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating prompt:', error);
+    throw error;
+  }
+  return data;
 }
 
 export async function deletePrompt(id) {
-  const prompts = getPrompts();
-  const prompt = prompts.find(p => p.id === id);
-  if (prompt) {
-    // Clean up images
-    if (prompt.imageIds?.length) {
-      for (const imgId of prompt.imageIds) {
-        await deleteImage(imgId);
-      }
+  const { data: prompt } = await supabase
+    .from('prompts')
+    .select('image_ids')
+    .eq('id', id)
+    .single();
+
+  if (prompt?.image_ids?.length) {
+    for (const imgId of prompt.image_ids) {
+      await deleteImage(imgId);
     }
-    savePrompts(prompts.filter(p => p.id !== id));
+  }
+
+  const { error } = await supabase
+    .from('prompts')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting prompt:', error);
+    throw error;
   }
 }
 
-export function toggleFavorite(id) {
-  const prompts = getPrompts();
-  const idx = prompts.findIndex(p => p.id === id);
-  if (idx !== -1) {
-    prompts[idx].favorite = !prompts[idx].favorite;
-    savePrompts(prompts);
-    return prompts[idx].favorite;
+export async function toggleFavorite(id) {
+  const { data: prompt } = await supabase
+    .from('prompts')
+    .select('favorite')
+    .eq('id', id)
+    .single();
+
+  const newVal = !prompt.favorite;
+  await updatePrompt(id, { favorite: newVal });
+  return newVal;
+}
+
+// ---- Categories (Supabase 'categories' table) ----
+export async function getCategories() {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching categories:', error);
+    return [];
   }
-  return false;
+  return data;
 }
 
-// ---- Categories (localStorage) ----
+export async function addCategory(cat) {
+  const { data, error } = await supabase
+    .from('categories')
+    .insert([{
+      id: cat.id,
+      name: cat.name,
+      icon: cat.icon,
+      color: cat.color
+    }])
+    .select()
+    .single();
 
-export function getCategories() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(LS_KEY_CATEGORIES));
-    if (stored && stored.length) return stored;
-  } catch {}
-  saveCategories(DEFAULT_CATEGORIES);
-  return DEFAULT_CATEGORIES;
+  if (error) {
+    console.error('Error adding category:', error);
+    throw error;
+  }
+  return data;
 }
 
-export function saveCategories(categories) {
-  localStorage.setItem(LS_KEY_CATEGORIES, JSON.stringify(categories));
+export async function deleteCategory(id) {
+  const { error } = await supabase
+    .from('categories')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting category:', error);
+    throw error;
+  }
 }
 
-export function addCategory(cat) {
-  const cats = getCategories();
-  cats.push(cat);
-  saveCategories(cats);
-  return cat;
+// ---- Canvas positions (Supabase 'canvas_positions' table) ----
+export async function getCanvasPositions() {
+  const { data, error } = await supabase
+    .from('canvas_positions')
+    .select('*');
+
+  if (error) {
+    console.error('Error fetching canvas positions:', error);
+    return {};
+  }
+
+  const positions = {};
+  data.forEach(p => {
+    positions[p.prompt_id] = { x: p.x, y: p.y };
+  });
+  return positions;
 }
 
-export function deleteCategory(id) {
-  const cats = getCategories().filter(c => c.id !== id);
-  saveCategories(cats);
-  return cats;
+export async function saveCanvasPosition(promptId, x, y) {
+  const { error } = await supabase
+    .from('canvas_positions')
+    .upsert({ prompt_id: promptId, x, y });
+
+  if (error) {
+    console.error('Error saving canvas position:', error);
+    throw error;
+  }
 }
 
-// ---- Canvas positions (localStorage) ----
+export async function saveAllCanvasPositions(positions) {
+  const data = Object.entries(positions).map(([prompt_id, pos]) => ({
+    prompt_id,
+    x: pos.x,
+    y: pos.y
+  }));
 
-export function getCanvasPositions() {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEY_CANVAS) || '{}');
-  } catch { return {}; }
-}
+  const { error } = await supabase
+    .from('canvas_positions')
+    .upsert(data);
 
-export function saveCanvasPosition(promptId, x, y) {
-  const positions = getCanvasPositions();
-  positions[promptId] = { x, y };
-  localStorage.setItem(LS_KEY_CANVAS, JSON.stringify(positions));
-}
-
-export function saveAllCanvasPositions(positions) {
-  localStorage.setItem(LS_KEY_CANVAS, JSON.stringify(positions));
+  if (error) {
+    console.error('Error saving all canvas positions:', error);
+    throw error;
+  }
 }
 
 // ---- Settings ----
+export async function getSettings() {
+  const { data, error } = await supabase
+    .from('settings')
+    .select('*');
 
-export function getSettings() {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEY_SETTINGS) || '{}');
-  } catch { return {}; }
+  if (error) {
+    console.error('Error fetching settings:', error);
+    return {};
+  }
+
+  const settings = {};
+  data.forEach(s => {
+    settings[s.key] = s.value;
+  });
+  return settings;
 }
 
-export function saveSetting(key, value) {
-  const s = getSettings();
-  s[key] = value;
-  localStorage.setItem(LS_KEY_SETTINGS, JSON.stringify(s));
+export async function saveSetting(key, value) {
+  const { error } = await supabase
+    .from('settings')
+    .upsert({ key, value });
+
+  if (error) {
+    console.error('Error saving setting:', error);
+    throw error;
+  }
 }
 
-// ---- Export for category helpers ----
-export function getCategoryById(id) {
-  return getCategories().find(c => c.id === id) || { id, name: id, icon: '📁', color: 'cat-default' };
+// ---- Category helper ----
+export async function getCategoryById(id) {
+  const categories = await getCategories();
+  return categories.find(c => c.id === id) || { id, name: id, icon: '📁', color: 'cat-default' };
 }
